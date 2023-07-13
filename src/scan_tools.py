@@ -1,10 +1,24 @@
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
 # matt's system
 import matplotlib
 matplotlib.use('TkAgg')
 
 from sensor_msgs.msg import LaserScan
+
+def polar2cart(r, theta):
+    """
+    Converts polar coordinates to cartesian coordinates.
+    Inputs: r - radius
+            theta - angle in radians
+    Outputs: x - x coordinate
+             y - y coordinate
+    """
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    return x, y
 
 def scan_to_points(scan_msg: LaserScan) -> np.ndarray:
     """
@@ -15,13 +29,26 @@ def scan_to_points(scan_msg: LaserScan) -> np.ndarray:
     angles = np.linspace(scan_msg.angle_min, scan_msg.angle_max, len(scan_msg.ranges))
 
     # Get the cartesian coordinates
-    x = scan_msg.ranges * np.cos(angles)
-    y = scan_msg.ranges * np.sin(angles)
+    x, y = polar2cart(scan_msg.ranges, angles)
 
     # Put in matrix form
     return np.vstack((x, y)).T
 
-def create_occupancy_grid_image(X: np.ndarray, img_size:tuple =(10, 10), bin_size: float=0.01):
+def csv_to_points(file_path):
+    with open(file_path, 'r') as f:
+        reader = csv.reader(f)
+        data = list(reader)
+
+    # get first scan
+    data = data[0]
+
+    ranges = np.array(data).astype(float)
+    angles = np.linspace(0., 2.*np.pi, len(ranges))
+    xy = polar2cart(ranges, angles)
+    xy = np.array(xy).T
+    return xy
+
+def create_occupancy_grid_image(X: np.ndarray, img_size:tuple =(10, 10), bin_size: float=0.01, bool_center=False):
     """
     Creates an occupancy grid image from a set of points.
     Inputs: X - (N, 2) numpy array of points
@@ -38,6 +65,9 @@ def create_occupancy_grid_image(X: np.ndarray, img_size:tuple =(10, 10), bin_siz
     
     # Convert points to centimeters and integers for indexing
     X = (X/bin_size).astype(int)
+    if bool_center:
+        img_center = np.array(img_size) / -2.
+        X = X - img_center.astype(int)
     
     # Make sure all points are within the grid
     X = X[(X[:,0] >= 0) & (X[:,0] < img_size[0]) & (X[:,1] >= 0) & (X[:,1] < img_size[1])]
@@ -47,7 +77,7 @@ def create_occupancy_grid_image(X: np.ndarray, img_size:tuple =(10, 10), bin_siz
     
     return grid
 
-def visualize_occupancy_grid_image(grid_image: np.ndarray):
+def visualize_occupancy_grid_image(grid_image: np.ndarray, center=(0, 0)):
     """
     Visualizes an occupancy grid image.
     Input: grid_image - (N, M) numpy array of the occupancy grid (0 or 1)
@@ -61,13 +91,47 @@ def visualize_occupancy_grid_image(grid_image: np.ndarray):
     plt.colorbar()
     plt.show()
 
+def xy_scatter_plot(X: np.ndarray, title: str='Scatter Plot', xlabel: str='X', ylabel: str='Y'):
+    """
+    Visualizes a scatter plot of points.
+    Input: X - (N, 2) numpy array of points
+    """
+
+    # Display the occupancy grid as a binary image
+    plt.scatter(X[:,0], X[:,1])
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.show()
+
 ####################
 # Tests
 ####################
 def test_visualize_occupancy_grid():
     points = np.random.uniform(0, 10, size=(100, 2))
     grid = create_occupancy_grid_image(points, img_size=(10, 10), bin_size=0.05)
+    print(points.shape)
+    visualize_occupancy_grid_image(grid)
+
+def test_scatter_plot():
+    points = np.random.uniform(0, 10, size=(100, 2))
+    print(points.shape)
+    xy_scatter_plot(points)
+
+def test_csv(data_path):
+    points = csv_to_points(data_path)
+    print(points.shape)
+    # xy_scatter_plot(points)
+    grid = create_occupancy_grid_image(points, img_size=(1, 1), bin_size=0.01, bool_center=True)
     visualize_occupancy_grid_image(grid)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str, default=None)
+    args = parser.parse_args()
+    
     test_visualize_occupancy_grid()
+    test_scatter_plot()
+
+    if args.data_path is not None:
+        test_csv(data_path=args.data_path)
