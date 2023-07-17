@@ -1,0 +1,21 @@
+<launch>
+  # scan matcher stuff
+  <param name="/use_sim_time" value="false"/>
+  <node pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find laser_scan_matcher)/demo/demo.rviz"/>
+
+  <node pkg="tf" type="static_transform_publisher" name="base_link_to_laser"
+    args="0.0 0.0 0.0 0.0 0.0 0.0 base_link laser 40" />
+
+  <node pkg="laser_scan_matcher" type="laser_scan_matcher_node"
+    name="laser_scan_matcher_node" output="screen">
+
+    <param name="max_iterations" value="10"/>
+    <param name="kf_dist_linear" value="10"/>  # 10m
+    <param name="kf_dis_angluar" value="3.14159"/>  # pi radians
+  </node>
+
+  # spoofed scan
+  <node name="test_scan_publisher" pkg="lidar_locator" type="test_scan_publisher.py" output="screen"/>
+
+</launch>

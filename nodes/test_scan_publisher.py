@@ -20,7 +20,8 @@ def create_fake_scan_message(file_path) -> LaserScan:
     scan = data[0]
 
     laser_scan = LaserScan()
-    laser_scan.header.frame_id = "map"
+    laser_scan.header.frame_id = "base_link"
+    laser_scan.header.stamp = rospy.Time.now()
     laser_scan.angle_min = 0.
     laser_scan.angle_max = 2.*np.pi
     laser_scan.angle_increment = 2.*np.pi / len(scan)
@@ -37,16 +38,19 @@ class TestScanPublisher:
     def __init__(self):
         rospy.init_node("test_scan_publisher")
 
+        # config
+        self.time_to_sleep = 5.
+
         # state
         self.initial_scan = None
         self.new_scan = None
+        self.publish_initial_scan = False
 
         # callback storage
         self.latest_scan_match = None
 
         # pub / sub
-        self.publisher_scan = rospy.Publisher("/scan1", LaserScan, queue_size=1)
-        self.publisher_scan_match = rospy.Publisher("/scan2", LaserScan, queue_size=1)
+        self.publisher_scan = rospy.Publisher("/scan", LaserScan, queue_size=1)
 
     def callback_scan_match(self, data):
         self.latest_scan_match = data
@@ -58,13 +62,19 @@ class TestScanPublisher:
 
     def publish_scans(self):
         if self.initial_scan is not None and self.new_scan is not None:
-            self.publisher_scan.publish(self.initial_scan)
-            self.publisher_scan_match.publish(self.new_scan)
+            if self.publish_initial_scan:
+                self.publisher_scan.publish(self.initial_scan)
+            else:
+                self.publisher_scan.publish(self.new_scan)
 
     def main(self):
         rate = rospy.Rate(10.)
+        start_time = rospy.get_time()
 
         while not rospy.is_shutdown():
+            if rospy.get_time() - start_time >= self.time_to_sleep:
+                self.publish_initial_scan = True
+
             self.publish_scans()
             rate.sleep()
     
@@ -73,6 +83,7 @@ if __name__ == '__main__':
         "/nethome/mlamsey3/catkin_ws/src/lidar_locator/data/scan1.csv",
         "/nethome/mlamsey3/catkin_ws/src/lidar_locator/data/scan2.csv"
     ]
+    
     tsp = TestScanPublisher()
     tsp.load_scans(paths)
     tsp.main()
